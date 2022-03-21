@@ -1,0 +1,211 @@
+###code by Alissa Gordon###
+
+#packages needed
+  library(shiny)
+  library(shinyWidgets)
+  library(survival)
+  library(survminer)
+
+#shinyapp ui    
+  ui <- fluidPage(  
+    titlePanel(
+      h1("Sample Size Calculator", align="center")
+    ),
+    #inputs
+    sidebarPanel( radioButtons("options", "Output:",
+                               c("Single Value" = "sing",
+                                 "Curve" = "curve")),
+                  uiOutput("display")
+                  ,
+                  sliderInput("pmed", label = h6("primary median"), min = 1, 
+                              max = 10, value = 3, step=0.25),
+                  sliderInput("mmed", label = h6("metastatic median"), min = 1, 
+                              max = 10, value = 2, step=0.25),
+                  sliderInput("recruit", label = h6("years recruitment"), min = 1, 
+                              max = 5, value = 3, step=0.5),
+                  sliderInput("trial", label = h6("years of trial"), min = 1, 
+                              max = 10, value = 7, step=0.5),
+                  sliderInput("power", label = h6("power"), min = 0, 
+                              max = 1, value = 0.9),
+                  sliderInput("alpha", label = h6("alpha"), min = 0, 
+                              max = 1, value = 0.1),
+                  sliderInput('precision',label=h6("precision, how closely we want to get to our desired power"), min=0, max=0.5, value=0.005),
+                  numericInput('sample', label=h6("starting guess for n (subgroup size). Recommend using smaller replications first to find a good guess then move onto bigger replications."), value=170),
+                   numericInput('reps', label=h6('replications (10~30 seconds, 100~1 minute, 1000~10 minutes, 10000 ~1 hour'), value="N/A"),
+    # ui inputs here, they show up in a gray box on left side by default,
+    #does not start until submit button is clicked
+    submitButton("Submit")
+  ), 
+ 
+    mainPanel(
+      align = "center",
+      width = 12,
+      setBackgroundColor(
+        color = adjustcolor("#ff8200",alpha.f = 0.5)
+      )),
+    h4("Calculated Sample Size n (for an arm/subgroup):"),
+    textOutput(('n'))
+  )
+  
+  #server
+  server <- function(input, output, session) {
+    output$A<-renderText("Just n")
+    output$B<-renderText("Sorry, under construction")
+    output$display <- renderUI(switch(input$options,
+                                      "sing" = textOutput("A"),
+                                      "curve" =textOutput("B")))
+    
+    
+    
+    #calculations for sample size (taken from sample size calc code)
+    output$n<-renderText({
+     
+      
+      ##establishing experimental variables##
+      startingn<-input$sample #initial subgroup size (subgroups: primary and metastatic)
+      mmedian<-input$mmed#metastatic lifespan median
+      
+      pmedian<- input$pmed#primary lifespan median
+      plambda<-log(2)/pmedian #finds lambda for which median of exp curve would be pmedian
+      mlambda<-log(2)/mmedian #finds lambda for which median of exp curve would be mmedian
+      alpha<-input$alpha
+      beta<-1-input$power
+      precision<-input$precision
+      n<-startingn
+      Nincrement<-20 #increment size for sample size determination
+      yearsrecruiting<-input$recruit #years spent recruiting participants
+      yearsoftrial<-input$trial #years of trial
+      survival<-NA
+      group<-NA
+      enrollment<-NA
+      newvalue<-NA
+      total<-2*n
+      count<-(1:total)
+      #'n' is subgroup size
+      
+      status1<-NA #1=death 0=censored
+      status2<-NA
+      status<-NA 
+      time<-NA
+      d<-data.frame(cbind( count, enrollment, group, survival,newvalue, status1, status2, status, time))
+      ##function for a singular trial of kaplan meier curve##
+      trials<-function()
+      {
+        d$group<-rep(c(1,2),each=n) # primary=1 and metastatic=2; n rows created for each treatment (2n total rows)
+        d$enrollment<-runif(2*n, min=0, max=yearsrecruiting) #enrollment randomly generated from a uniform distribution from 0 to yearsrecruiting
+        d$survival<-ifelse (d$group==1, time<-rexp(n, plambda), time<-rexp(n, mlambda)) #randomly generates survival times based off exponential model and lambda calculated for each group
+        
+        
+        ##establishing censor rate of around 10%##
+        censoring<- n%/%5 #20% of data potentially censored (will be around 10% after process); evenly rounded in order to use in sample size estimation (decimals interfere with dataframe size)
+        censoringp<-d$survival[1:censoring] #the first 20% of primary data marked for potential censoring
+        censoringm<-d$survival[n+1:censoring] #the first 20% of metastatic data marked for potential censoring
+        
+        ###creates a new column that generates numbers for the marked data from same exponential dataset##
+        for (val in censoringp) {
+          censornumberp<-rexp(censoring, plambda)
+        } 
+        for (val in censoringm){
+          censornumberm<-rexp(censoring,mlambda)
+        }
+        
+        
+        
+        
+        
+        ##random censoring##
+        for (i in 1:length(censoringp)){
+          ifelse(censoringp[i]<censornumberp[i], d$newvalue[i]<-d$survival[i], d$newvalue[i]<-censornumberp[i])
+        } #if the potential censor value is less than the original survival time, subject is censored.  This change in time or lack of change is represented by newvalue
+        
+        for (i in 1:length(censoringm)){
+          ifelse(censoringm[i]<censornumberm[i], d$newvalue[n+i]<-d$survival[n+i], d$newvalue[n+i]<-censornumberm[i])
+        }#same process but with metastatic patients
+        
+        for (i in 1:length(d$survival)){
+          if (is.na(d$newvalue[i])){
+            d$newvalue[i]<-d$survival[i]
+          }
+        }
+        ##marks censored data based off of randomness##
+        for (i in 1:length(d$survival)){
+          ifelse(d$newvalue[i]<d$survival[i], d$status1[i]<-0, d$status1[i]<-1)
+        } 
+        
+        d$time<-d$newvalue+d$enrollment
+        
+        ##censors if time is more than yearsoftrial##
+        for (i in 1: length(d$survival)){
+          ifelse(d$time[i]>yearsoftrial, d$status2[i]<-0, d$status2[i]<-1)
+        } #marks as censored in status2 if time>yearsoftrial
+        
+        for(i in 1:length(d$survival)){
+          ifelse(d$status2[i]==0,d$newvalue[i]<-yearsoftrial-d$enrollment[i],d$newvalue[i]<-d$newvalue[i])
+        } #if censored, newvalue (variable being analyzed in km curve) is yearsoftrial minus enrollment, otherwise newvalue remains initial survival time
+        
+        
+        
+        
+        
+        ##marks as censored in new variable status if censored either due to time or randomness##
+        for(i in 1:length(d$survival)){
+          ifelse(d$status1[i]==0|d$status2[i]==0, d$status[i]<-0, d$status[i]<-1)
+        }
+        
+        
+        ##km curve output and p value##
+        kmcurve<-survfit(Surv(d$newvalue, d$status)~d$group, data=d)  #creates curve model of newvalue, censored by status, and sorted by group
+        
+        survdiff(Surv(d$newvalue)~d$group) #plots the curve and shows risk, event, and censor table by year
+        survdifffxn<- survdiff(Surv(d$newvalue)~d$group) #only one group error
+        p.val <- 1 - pchisq(survdifffxn$chisq, length(survdifffxn$n) - 1) #finds p value using chi square
+        return(p.val) #returns p value for later storage
+      }  
+      
+    
+    p_vals<-replicate(input$reps, trials())
+    significant<-p_vals[p_vals<alpha] #significant p values below the alpha value
+    power<-length(significant)/length(p_vals) #power defined as significant p values over all p values
+    
+    print(c(power, n))
+    
+    ##code to find sample size for desired power##
+    goalpower<-1-beta
+    lowergoal<-goalpower-input$precision
+    uppergoal<-goalpower+input$precision
+    
+    while (power<lowergoal||power>uppergoal){ #while loop so code repeats until power is within (0.895, 0.9045)
+      #if power is too low, Nincrement added onto sample size and new power is found
+      if (power<lowergoal){
+        n<-n+Nincrement
+        total<-2*n
+        count<-(1:total)
+        d<-data.frame(cbind( count, enrollment, group, survival,newvalue, status1, status2, status, time))
+        
+        p_vals<-replicate(input$reps, trials())
+        significant<-p_vals[p_vals<alpha]
+        power<-length(significant)/length(p_vals)
+        print(c(n, power))
+      }else{
+        #if power is too high, Nincrement reduced to 90% original size and subtracted from sample size, new power is found
+        Nincrement<-Nincrement%/%(10/9) #%/% fixes issue of rounding 
+        n<-n-Nincrement
+        total<-2*n
+        count<-(1:total)
+        d<-data.frame(cbind( count, enrollment, group, survival,newvalue, status1, status2, status, time))
+        
+        p_vals<-replicate(input$reps, trials())
+        significant<-p_vals[p_vals<alpha]
+        power<-length(significant)/length(p_vals)
+        print(c(n, power))
+      }
+      
+    }
+    n #shows n
+    })
+  
+    
+    
+  }
+  
+  shinyApp(ui, server)
