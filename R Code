@@ -250,6 +250,7 @@ server <- function(input, output, session) {
       }else{
         #if power is too high, Nincrement reduced to 90% original size and subtracted from sample size, new power is found
         Nincrement<-Nincrement%/%(10/9) #%/% fixes issue of rounding 
+        if(Nincrement < 2) { Nincrement = 10}   ### NEW CODE
         n<-n-Nincrement
         total<-2*n
         count<-(1:total)
