@@ -83,6 +83,11 @@ ui <- fluidPage(
                          column(4,
                                 h4("Calculated Sample Size n (for an arm/subgroup):"),
                                 verbatimTextOutput(('n'), placeholder=TRUE),
+                                 tags$head(tags$style(HTML("
+                            #n {
+                              font-size: 20px;
+                            }
+                            "))),
                                 actionButton("action", "Get My Sample Size", style="font-size:120%", icon("calculator"),
                                              style="color: #fff; background-color: #FF8200; border-color: #FF8200"),
                                 
