@@ -83,16 +83,19 @@ ui <- fluidPage(
                          column(4,
                                 h4("Calculated Sample Size n (for an arm/subgroup):"),
                                 verbatimTextOutput(('n'), placeholder=TRUE),
-                                 tags$head(tags$style(HTML("
+                                tags$head(tags$style(HTML("
                             #n {
                               font-size: 20px;
                             }
-                            "))),
+                            ")))
+                                ,
+                                
                                 actionButton("action", "Get My Sample Size", style="font-size:120%", icon("calculator"),
                                              style="color: #fff; background-color: #FF8200; border-color: #FF8200"),
                                 
                                 actionButton("resetAll", "Reset Inputs",style="font-size:120%", icon("remove"),
-                                             style="color: #fff; background-color: #FF8200; border-color: #FF8200")
+                                             style="color: #fff; background-color: #FF8200; border-color: #FF8200"),
+                                textOutput("sim")
                                
                          )
                   ),
@@ -106,6 +109,7 @@ ui <- fluidPage(
                          p("Brayden Campbell"),
                          p("Abbie Daniel"),
                          p("Kianna Holder"),
+                         p("Justin Ketterl"),
                          p("Meghan Mabry"),
                          p("Nidhi Patel"))
       
@@ -123,11 +127,8 @@ server <- function(input, output, session) {
   #calculations for sample size (taken from sample size calc code)
   buttonGo <- eventReactive(input$action, {
     
-    # output$A<-renderText(paste("Output will be n for each arm."))
-    output$B<-renderText("Sorry, this option is not available yet.")
-    output$display <- renderUI(switch(input$options,
-                                      "sing" = textOutput("A"),
-                                      "curve" =textOutput("B")))
+    withProgress(message = 'Running Simulation', value = 0, {
+    
     
     
     ##establishing experimental variables##
@@ -252,9 +253,11 @@ server <- function(input, output, session) {
         significant<-p_vals[p_vals<alpha]
         power<-length(significant)/length(p_vals)
         print(c(n, power))
+        setProgress(1-abs(goalpower-power))
+        
       }else{
         #if power is too high, Nincrement reduced to 90% original size and subtracted from sample size, new power is found
-        Nincrement<-Nincrement%/%(10/9) #%/% fixes issue of rounding 
+        Nincrement<-Nincrement%/%(10/9)#%/% fixes issue of rounding 
         if(Nincrement < 2) { Nincrement = 10}   ### NEW CODE
         n<-n-Nincrement
         total<-2*n
@@ -265,12 +268,13 @@ server <- function(input, output, session) {
         significant<-p_vals[p_vals<alpha]
         power<-length(significant)/length(p_vals)
         print(c(n, power))
+        setProgress(1-abs(goalpower-power))
       }
       
     }
     
     n
-    
+    })
   })
   
   
