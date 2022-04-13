@@ -7,95 +7,106 @@ library(survival)
 library(shinyjs)
 library(survminer)
 
+
 #shinyapp ui    
 ui <- fluidPage(  
   useShinyjs(),
   titlePanel(
     h1("Sample Size Calculator", align="center")
   ),
-  #inputs
-  div(
-    
-    id = "form", 
-  sidebarPanel( 
-               
-                fluidRow(
-                  column(6,
-                         setSliderColor(c("#FF8200", "#FF8200", "#FF8200", "#FF8200","#FF8200","#FF8200", "#FF8200"), c(1,2,3,4,5, 6,7)),
-               
-                      sliderInput("pmed", label = h6("Primary Median    "), min = 1, 
-                            max = 10, value = 3, step=0.25),
-                      sliderInput("power", label = h6("power"), min = 0, 
-                                  max = 1, value = 0.9),
-                sliderInput("recruit", label = h6("years recruitment"), min = 1, 
-                            max = 5, value = 3, step=0.5),
-                sliderInput('precision',label=h6("precision"), min=0, max=0.5, value=0.005),
-                numericInput('sample', label=h6("starting guess for n (subgroup size). "), value=170)
-                
-                ),
-                column(6,
-                       sliderInput("mmed", label = h6("Metastatic Median"), min = 1, 
-                                   max = 10, value = 2, step=0.25),
-                       
-                sliderInput("alpha", label = h6("alpha"), min = 0, 
-                            max = 1, value = 0.1),
-                sliderInput("trial", label = h6("years of trial"), min = 1, 
-                            max = 10, value = 7, step=0.5),
-                
-                
-                numericInput('reps', label=h6('replications' ), value="N/A")
-                # ui inputs here, they show up in a gray box on left side by default,
-                #does not start until submit button is clicked
-               )
-  ))), 
   
-  mainPanel(
+  
+  
     setBackgroundColor(
       color = adjustcolor("#80d4ff",alpha.f = 0.35)
     ),
     tabsetPanel(type="tabs", id="tab",
                 tabPanel(
-                  "Help",
+                
+                  "Instructions",
+                  
                    p("       "),
                    p(strong("Input Meanings"),
                      
-                     p( "Alpha - The level of significance for the study, which can also be thought of as the probability of a Type I error."
+                     p( "Primary Median - Median survival for patients treated based on the tumor receptors of their primary tumor."
                      ),
-                     p("Power - The probability of correctly rejecting the null hypothesis when it is false. Can also be thought of as 1-beta, where beta is the probability of a Type II error.
-"),
-                     p("Precision - The margin of error in power which would be deemed acceptable for a given goal.
-"),
-                     p("Primary Median - This is the median for the lifespan of patients.")
+                     p("Metastatic Median - Median survival for patients treated based on the tumor receptors of their metastatic tumor."),
+                     p("Alpha - Acceptable Type I error risk."),
+                     p("Power - 1 minus the acceptable Type II error risk.")
                    ),
-                   p("Metastatic Median - Median for the lifespan of patients whose cancer has become metastatic.
-"),
-                   p("Years Recruiting - Number of years spent recruiting people for the study."),
-                   p("Years Trial - Number of years trial will last
-."),
-                   p("Starting Guess for N - Can be used to speed up the program if an idea for a sample size has already been suggested
-"),
-                   p("Replications - Number of times you would like to run the trial before finding the power. We recommend setting this low initially and then slowly increasing if needed since a large numer of replications takes a long time to process. 
-
+                   p("Years Trial - Number of years trial will follow-up with patients from the start of the trial."),
+                   p("Years Recruiting - Number of years spent recruiting people for the study. Must be less than years of trial."),
+                   p("Precision - The margin of error for estimating power. Smaller error requires longer run time."),
+                   p("Starting Guess for N - Start low and/or leave at current setting."),
+                   p("Replications - Number of times you would like to run the simulation before finding the power. We recommend setting this low initially for time. Set > 10,000 when ready for the final answer. 10,000 can take >15 minutes.
 "),
                    p(""),
                    p(strong("Additional Notes:")),
-                   p("Once you have entered all of the data, simply hit 'Calculate!' in the corresponding tab to see the sample size recommended through this simulation for each arm and how all of the other sample size guesses performed in terms of power.")
-                   
-                ),
+                   p("Once you have entered all of the data, click the sample size tab and click \"Calculate\". The answer is the sample size for each arm of the trial. The progress meter will indicate the simulation is running and give you some idea of how long it may take.
+  "              ),
+                  p("Email any feedback and questions to tapjr@outlook.com. ")),
                 tabPanel("Calculation", 
-                         h4("Calculated Sample Size n (for an arm/subgroup):"),
-                         verbatimTextOutput(('n'), placeholder=TRUE),
-                         actionButton("action", "Get My Sample Size", style="font-size:120%", icon("calculator"),
-                                      style="color: #fff; background-color: #FF8200; border-color: #FF8200"),
                          
-                         actionButton("resetAll", "Reset Inputs",style="font-size:120%", icon("remove"),
-                                      style="color: #fff; background-color: #FF8200; border-color: #FF8200"),
-                ),
-                tabPanel("Contributors")
+                         #inputs
+                         div(
+                           
+                           id = "form", 
+                           
+                           column(4,
+                                  setSliderColor(c("#FF8200", "#FF8200", "#FF8200", "#FF8200","#FF8200","#FF8200", "#FF8200"), c(1,2,3,4,5, 6,7)),
+                                  
+                                  sliderInput("pmed", label = h6("Primary Median    "), min = 1, 
+                                              max = 6, value = 3, step=0.25),
+                                  sliderInput("power", label = h6("Power"), min = 0, 
+                                              max = 1, value = 0.9),
+                                  sliderInput("recruit", label = h6("Years Recruitment"), min = 1, 
+                                              max = 5, value = 3, step=0.5),
+                                 
+                                  numericInput('sample', label=h6("Starting guess for n (subgroup size). "), value=170),
+                                  sliderInput('precision',label=h6("Precision"), min=0, max=0.1, value=0.005)
+                           ),
+                           column(4,
+                                  sliderInput("mmed", label = h6("Metastatic Median"), min = 1, 
+                                              max = 6, value = 2, step=0.25),
+                                  
+                                  sliderInput("alpha", label = h6("Alpha"), min = 0, 
+                                              max = 1, value = 0.1),
+                                  sliderInput("trial", label = h6("Years of Trial"), min = 1, 
+                                              max = 10, value = 7, step=0.5),
+                                  
+                                  
+                                  numericInput('reps', label=h6('Replications' ), value="N/A")
+                                  # ui inputs here, they show up in a gray box on left side by default,
+                                  #does not start until submit button is clicked
+                                  
+                           )),
+                         column(4,
+                                h4("Calculated Sample Size n (for an arm/subgroup):"),
+                                verbatimTextOutput(('n'), placeholder=TRUE),
+                                actionButton("action", "Get My Sample Size", style="font-size:120%", icon("calculator"),
+                                             style="color: #fff; background-color: #FF8200; border-color: #FF8200"),
+                                
+                                actionButton("resetAll", "Reset Inputs",style="font-size:120%", icon("remove"),
+                                             style="color: #fff; background-color: #FF8200; border-color: #FF8200")
+                               
+                         )
+                  ),
+                tabPanel("Contributors",
+                         p("    "),
+                         p("Completed under the guidance of Dr. Allen Pannell"),
+                         p("Initial code and merging done by Alissa Gordon"),
+                         p(strong("A special thank you to the following contributors:")),
+                         p("Abigail Grace Banas"),
+                         p("Adrian Batt"),
+                         p("Brayden Campbell"),
+                         p("Abbie Daniel"),
+                         p("Kianna Holder"),
+                         p("Meghan Mabry"),
+                         p("Nidhi Patel"))
       
     )
     
-))
+)
 
 #server
 server <- function(input, output, session) {
