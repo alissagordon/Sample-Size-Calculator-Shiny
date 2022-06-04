@@ -11,16 +11,19 @@ library(survminer)
 #shinyapp ui    
 ui <- fluidPage(  
   useShinyjs(),
+  #title of site
   titlePanel(
     h1("Sample Size Calculator", align="center")
   ),
   
   
-  
+  #sets background color to light blue
   setBackgroundColor(
     color = adjustcolor("#80d4ff",alpha.f = 0.35)
   ),
+  #uses tabs
   tabsetPanel(type="tabs", id="tab",
+              #first tab (instructions)
               tabPanel(
                 
                 "Instructions",
@@ -45,15 +48,17 @@ ui <- fluidPage(
                 p("Once you have entered all of the data, click the sample size tab and click \"Calculate\". The answer is the sample size for each arm of the trial. The progress meter will indicate the simulation is running and give you some idea of how long it may take.
   "              ),
                 p("Email any feedback and questions to tapjr@outlook.com. ")),
+              #second tab (calculations/for inputs)
               tabPanel("Calculation", 
                        
-                       #inputs
+                       #inputs/default
                        div(
                          
                          id = "form", 
                          
                          column(4,
-                                setSliderColor(c("#FF8200", "#FF8200", "#FF8200", "#FF8200","#FF8200","#FF8200", "#FF8200"), c(1,2,3,4,5, 6,7)),
+                               #orange sliders
+                                 setSliderColor(c("#FF8200", "#FF8200", "#FF8200", "#FF8200","#FF8200","#FF8200", "#FF8200"), c(1,2,3,4,5, 6,7)),
                                 
                                 sliderInput("pmed", label = h6("Primary Median    "), min = 1, 
                                             max = 6, value = 3, step=0.25),
@@ -76,8 +81,8 @@ ui <- fluidPage(
                                 
                                 
                                 numericInput('reps', label=h6('Replications' ), value="N/A")
-                                # ui inputs here, they show up in a gray box on left side by default,
-                                #does not start until submit button is clicked
+                                
+                                
                                 
                          )),
                        column(4,
@@ -89,16 +94,17 @@ ui <- fluidPage(
                             }
                             ")))
                               ,
-                              
+                              #does not start until submit button is clicked
                               actionButton("action", "Get My Sample Size", style="font-size:120%", icon("calculator"),
                                            style="color: #fff; background-color: #FF8200; border-color: #FF8200"),
-                              
+                              #resets to all default inputs
                               actionButton("resetAll", "Reset Inputs",style="font-size:120%", icon("remove"),
                                            style="color: #fff; background-color: #FF8200; border-color: #FF8200"),
                               textOutput("sim")
                               
                        )
               ),
+              #final tab (contributors)
               tabPanel("Contributors",
                        p("    "),
                        p("Completed under the guidance of Dr. Allen Pannell"),
@@ -117,30 +123,35 @@ ui <- fluidPage(
   
 )
 
+
+
 #server
 server <- function(input, output, session) {
+  #resets to default inputs
   resetButton <- observeEvent(input$resetAll, {
     reset("form")
   })
   
   
   #calculations for sample size (taken from sample size calc code)
+  #reacts to Get My Sample Size button being clicked (eventreactive)
   buttonGo <- eventReactive(input$action, {
     
+    #progress bar set at zero
     withProgress(message = 'Running Simulation', value = 0, {
       
       
       
       ##establishing experimental variables##
-      startingn<-input$sample #initial subgroup size (subgroups: primary and metastatic)
+      startingn<-input$sample #initial arm size (arms: primary and metastatic)
       mmedian<-input$mmed#metastatic lifespan median
       
       pmedian<- input$pmed#primary lifespan median
       plambda<-log(2)/pmedian #finds lambda for which median of exp curve would be pmedian
       mlambda<-log(2)/mmedian #finds lambda for which median of exp curve would be mmedian
-      alpha<-input$alpha
-      beta<-1-input$power
-      precision<-input$precision
+      alpha<-input$alpha #type 1 error rate
+      beta<-1-input$power #type 2 error rate
+      precision<-input$precision #how closely we want to be to the power
       n<-startingn
       Nincrement<-20 #increment size for sample size determination
       yearsrecruiting<-input$recruit #years spent recruiting participants
@@ -153,11 +164,16 @@ server <- function(input, output, session) {
       count<-(1:total)
       #'n' is subgroup size
       
+      
+      #status for censoring
       status1<-NA #1=death 0=censored
       status2<-NA
       status<-NA 
       time<-NA
+      #create dataframe d for variables
       d<-data.frame(cbind( count, enrollment, group, survival,newvalue, status1, status2, status, time))
+      
+      
       ##function for a singular trial of kaplan meier curve##
       trials<-function()
       {
@@ -230,17 +246,22 @@ server <- function(input, output, session) {
       }  
       
       
-      p_vals<-replicate(input$reps, trials())
+      p_vals<-replicate(input$reps, trials()) #simulates reps amount and stores p values into vector names p_vals
       significant<-p_vals[p_vals<alpha] #significant p values below the alpha value
       power<-length(significant)/length(p_vals) #power defined as significant p values over all p values
       
       print(c( power,n))
       
       ##code to find sample size for desired power##
-      goalpower<-1-beta
+      goalpower<-1-beta #goal power is 1-input of beta
+      
+      #using precision to establish a range of acceptable powers
       lowergoal<-goalpower-input$precision
       uppergoal<-goalpower+input$precision
+      
+      #progress bar changed based on how close our power is to the goal power
       setProgress(1-abs(goalpower-power))
+      
       while (power<lowergoal||power>uppergoal){ #while loop so code repeats until power is within (0.895, 0.9045)
         #if power is too low, Nincrement added onto sample size and new power is found
         if (power<lowergoal){
@@ -253,12 +274,12 @@ server <- function(input, output, session) {
           significant<-p_vals[p_vals<alpha]
           power<-length(significant)/length(p_vals)
           print(c(n, power))
-          setProgress(1-abs(goalpower-power))
+          setProgress(1-abs(goalpower-power)) #progress bar changed accordingly
           
         }else{
           #if power is too high, Nincrement reduced to 90% original size and subtracted from sample size, new power is found
           Nincrement<-Nincrement%/%(10/9)#%/% fixes issue of rounding 
-          if(Nincrement < 2) { Nincrement = 10}   ### NEW CODE
+          if(Nincrement < 2) { Nincrement = 10}   ### fixes issue of nincrement becoming too small by resetting to nincrement=10
           n<-n-Nincrement
           total<-2*n
           count<-(1:total)
@@ -268,16 +289,16 @@ server <- function(input, output, session) {
           significant<-p_vals[p_vals<alpha]
           power<-length(significant)/length(p_vals)
           print(c(n, power))
-          setProgress(1-abs(goalpower-power))
+          setProgress(1-abs(goalpower-power)) #changes progress bar accordingly
         }
         
       }
       
-      n
+      n #prints "n" to UI
     })
   })
   
-  
+  #n shown once button is clicked
   output$n<-renderText({
     buttonGo()
   })
